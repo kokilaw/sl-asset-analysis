@@ -25,9 +25,18 @@ from portfolio import CAL_UT_API
 
 def get_google_sheet_xlsx_url() -> str:
     """Resolve Google Sheet XLSX URL from environment variables."""
-    direct_url = (os.getenv("GOOGLE_SHEET_XLSX_URL") or "").strip()
-    if direct_url:
-        return direct_url
+    raw = (os.getenv("GOOGLE_SHEET_XLSX_URL") or "").strip().strip("\"'")
+    if raw:
+        if raw.startswith(("http://", "https://")):
+            return raw
+        if raw.startswith("docs.google.com/spreadsheets/d/"):
+            return f"https://{raw}"
+        # If the secret is just a Sheet ID, build the export URL.
+        if "/" not in raw and " " not in raw:
+            return f"https://docs.google.com/spreadsheets/d/{raw}/export?format=xlsx"
+        raise RuntimeError(
+            "Invalid GOOGLE_SHEET_XLSX_URL format. Use full URL or Sheet ID."
+        )
 
     sheet_id = (os.getenv("GOOGLE_SHEET_ID") or "").strip()
     if sheet_id:
@@ -621,6 +630,45 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
         </table>
     </div>
 
+    <div class=\"table-wrap\">
+        <h2>🏦 Detailed Holdings</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Fund</th>
+                    <th style=\"text-align:right\">Units</th>
+                    <th style=\"text-align:right\">Cost Basis</th>
+                    <th style=\"text-align:right\">Break-even NAV</th>
+                    <th style=\"text-align:right\">Current NAV</th>
+                    <th style=\"text-align:right\">Current Value</th>
+                    <th style=\"text-align:right\">Unrealized P&L</th>
+                    <th style=\"text-align:right\">Unrealized %</th>
+                    <th style=\"text-align:right\">This Month Flow</th>
+                    <th style=\"text-align:right\">Est. Month P&L</th>
+                    <th>NAV Age</th>
+                    <th>Last Transaction</th>
+                </tr>
+            </thead>
+            <tbody>{ut_rows}</tbody>
+        </table>
+    </div>
+
+    <div class=\"table-wrap\">
+        <h2>🧾 Recent Activity (Current Month)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Fund</th>
+                    <th>Type</th>
+                    <th style=\"text-align:right\">Units</th>
+                    <th style=\"text-align:right\">Cash Flow</th>
+                </tr>
+            </thead>
+            <tbody>{activity_rows}</tbody>
+        </table>
+    </div>
+
     <div class="table-wrap">
         <h2>📘 Quick Guide (Key Terms)</h2>
         <table>
@@ -678,45 +726,6 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                     <td>Read together: flow explains capital movement, P&amp;L explains performance.</td>
                 </tr>
             </tbody>
-        </table>
-    </div>
-
-    <div class=\"table-wrap\">
-        <h2>🏦 Detailed Holdings</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Fund</th>
-                    <th style=\"text-align:right\">Units</th>
-                    <th style=\"text-align:right\">Cost Basis</th>
-                    <th style=\"text-align:right\">Break-even NAV</th>
-                    <th style=\"text-align:right\">Current NAV</th>
-                    <th style=\"text-align:right\">Current Value</th>
-                    <th style=\"text-align:right\">Unrealized P&L</th>
-                    <th style=\"text-align:right\">Unrealized %</th>
-                    <th style=\"text-align:right\">This Month Flow</th>
-                    <th style=\"text-align:right\">Est. Month P&L</th>
-                    <th>NAV Age</th>
-                    <th>Last Transaction</th>
-                </tr>
-            </thead>
-            <tbody>{ut_rows}</tbody>
-        </table>
-    </div>
-
-    <div class=\"table-wrap\">
-        <h2>🧾 Recent Activity (Current Month)</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Fund</th>
-                    <th>Type</th>
-                    <th style=\"text-align:right\">Units</th>
-                    <th style=\"text-align:right\">Cash Flow</th>
-                </tr>
-            </thead>
-            <tbody>{activity_rows}</tbody>
         </table>
     </div>
 
