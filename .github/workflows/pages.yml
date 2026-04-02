@@ -1,0 +1,111 @@
+name: Build and Deploy Reports to GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  schedule:
+    # Weekly run (Monday 02:00 UTC)
+    - cron: "0 2 * * 1"
+    # Monthly run (1st day 03:00 UTC)
+    - cron: "0 3 1 * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests openpyxl
+
+      - name: Generate reports
+        run: |
+          python portfolio.py
+          python portfolio_monthly.py
+
+      - name: Build index page
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          generated = Path('generated')
+          generated.mkdir(exist_ok=True)
+
+          links = []
+          files = [
+              ('portfolio_report.html', 'Weekly Stock Report'),
+              ('monthly_portfolio_report.html', 'Monthly Unit Trust Report'),
+              ('portfolio_email.html', 'Portfolio Email View'),
+          ]
+
+          for filename, label in files:
+              path = generated / filename
+              if path.exists():
+                  links.append(f'<li><a href="{filename}">{label}</a></li>')
+
+          now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+          html = f'''<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>SL Asset Analysis Reports</title>
+            <style>
+              body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; }}
+              h1 {{ margin-bottom: 4px; }}
+              p {{ color: #555; }}
+              ul {{ line-height: 1.9; }}
+              a {{ text-decoration: none; }}
+              a:hover {{ text-decoration: underline; }}
+            </style>
+          </head>
+          <body>
+            <h1>SL Asset Analysis Reports</h1>
+            <p>Last generated: {now}</p>
+            <ul>
+              {''.join(links) if links else '<li>No reports found.</li>'}
+            </ul>
+          </body>
+          </html>'''
+
+          (generated / 'index.html').write_text(html, encoding='utf-8')
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: generated
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
