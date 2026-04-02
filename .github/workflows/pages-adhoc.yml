@@ -45,6 +45,7 @@ jobs:
         env:
           RUN_WEEKLY: ${{ inputs.generate_weekly_report }}
           RUN_MONTHLY: ${{ inputs.generate_monthly_report }}
+          GOOGLE_SHEET_XLSX_URL: ${{ secrets.GOOGLE_SHEET_XLSX_URL }}
         run: |
           if [ "$RUN_WEEKLY" = "true" ]; then
             python portfolio.py

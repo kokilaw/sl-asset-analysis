@@ -69,8 +69,24 @@ Update the `PORTFOLIO` list:
 - `buy_price`
 
 ### Unit trusts (`portfolio_monthly.py`)
-Update:
-- `SHEET_ID` (Google Sheets document id)
+Set one of these environment variables:
+- `GOOGLE_SHEET_XLSX_URL` (full export URL), or
+- `GOOGLE_SHEET_ID` (Google Sheets document id)
+
+Examples:
+
+```bash
+export GOOGLE_SHEET_ID="<your-sheet-id>"
+python3 portfolio_monthly.py
+```
+
+```bash
+export GOOGLE_SHEET_XLSX_URL="https://docs.google.com/spreadsheets/d/<your-sheet-id>/export?format=xlsx"
+python3 portfolio_monthly.py
+```
+
+For GitHub Actions, store this as a repository secret:
+- `GOOGLE_SHEET_XLSX_URL`
 
 Expected worksheet format (per tab):
 - `Date`

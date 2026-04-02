@@ -40,6 +40,8 @@ jobs:
           pip install requests openpyxl
 
       - name: Generate reports
+        env:
+          GOOGLE_SHEET_XLSX_URL: ${{ secrets.GOOGLE_SHEET_XLSX_URL }}
         run: |
           python portfolio.py
           python portfolio_monthly.py

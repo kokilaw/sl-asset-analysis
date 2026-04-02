@@ -22,8 +22,20 @@ from openpyxl import load_workbook
 
 from portfolio import CAL_UT_API
 
-SHEET_ID = "1OHO-dNlgixLfajcD_OjHlcs3v7hWYzA930Cn0CyxI7I"
-GOOGLE_SHEET_XLSX_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
+
+def get_google_sheet_xlsx_url() -> str:
+    """Resolve Google Sheet XLSX URL from environment variables."""
+    direct_url = (os.getenv("GOOGLE_SHEET_XLSX_URL") or "").strip()
+    if direct_url:
+        return direct_url
+
+    sheet_id = (os.getenv("GOOGLE_SHEET_ID") or "").strip()
+    if sheet_id:
+        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
+
+    raise RuntimeError(
+        "Missing Google Sheet config. Set GOOGLE_SHEET_XLSX_URL or GOOGLE_SHEET_ID."
+    )
 
 
 def fmt_lkr(value, decimals=2):
@@ -130,7 +142,8 @@ def _best_fund_match(sheet_name: str, api_funds: list[str]) -> str | None:
 
 def fetch_ut_transactions_from_sheet() -> list[dict]:
     """Read all worksheet tabs from the Google Sheet and parse transactions."""
-    response = requests.get(GOOGLE_SHEET_XLSX_URL, timeout=30)
+    sheet_url = get_google_sheet_xlsx_url()
+    response = requests.get(sheet_url, timeout=30)
     response.raise_for_status()
 
     wb = load_workbook(filename=BytesIO(response.content), data_only=True, read_only=True)
