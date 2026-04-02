@@ -7,10 +7,11 @@ on:
       - main
       - master
   schedule:
-    # Weekly run (Monday 02:00 UTC)
-    - cron: "0 2 * * 1"
-    # Monthly run (1st day 03:00 UTC)
-    - cron: "0 3 1 * *"
+    # Weekly run: Sunday 9:00 AM AEST (Saturday 23:00 UTC)
+    - cron: "0 23 * * 6"
+    # Monthly check window: 9:00 PM AEST on day 28-31 (11:00 UTC),
+    # run monthly report only when it is the actual month-end in AEST.
+    - cron: "0 11 28-31 * *"
 
 permissions:
   contents: read
@@ -22,7 +23,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+      report_mode: ${{ steps.decide.outputs.report_mode }}
+
+    steps:
+      - name: Decide report mode
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          should_run="true"
+          report_mode="both"
+
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            if [ "$EVENT_SCHEDULE" = "0 23 * * 6" ]; then
+              report_mode="weekly"
+            elif [ "$EVENT_SCHEDULE" = "0 11 28-31 * *" ]; then
+              tomorrow_day=$(TZ=Australia/Brisbane date -d 'tomorrow' +%d)
+              if [ "$tomorrow_day" = "01" ]; then
+                report_mode="monthly"
+              else
+                should_run="false"
+              fi
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "report_mode=$report_mode" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -42,9 +77,17 @@ jobs:
       - name: Generate reports
         env:
           GOOGLE_SHEET_XLSX_URL: ${{ secrets.GOOGLE_SHEET_XLSX_URL }}
+          REPORT_MODE: ${{ needs.prepare.outputs.report_mode }}
         run: |
-          python portfolio.py
-          python portfolio_monthly.py
+          if [ "$REPORT_MODE" = "both" ] || [ "$REPORT_MODE" = "weekly" ]; then
+            python portfolio.py
+          fi
+
+          if [ "$REPORT_MODE" = "both" ] || [ "$REPORT_MODE" = "monthly" ]; then
+            python portfolio_monthly.py
+          fi
+
+          mkdir -p generated
 
       - name: Build index page
         run: |
@@ -102,6 +145,7 @@ jobs:
 
   deploy:
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
