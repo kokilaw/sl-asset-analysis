@@ -245,6 +245,21 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
         net_contrib = sum(t["total"] for t in txns)
         last_txn = max((t["date"] for t in txns if t.get("date")), default=None)
 
+        pre_month_priced = [
+            t for t in txns
+            if t.get("date") and t["date"] < month_start and (t.get("unit_price") or 0) > 0
+        ]
+        pre_month_last_priced_txn = max(pre_month_priced, key=lambda t: t["date"], default=None)
+        opening_nav_proxy = (pre_month_last_priced_txn.get("unit_price") if pre_month_last_priced_txn else None)
+
+        all_priced = [
+            t for t in txns
+            if t.get("date") and (t.get("unit_price") or 0) > 0
+        ]
+        last_priced_txn = max(all_priced, key=lambda t: t["date"], default=None)
+        last_priced_nav = (last_priced_txn.get("unit_price") if last_priced_txn else None)
+        last_priced_date = (last_priced_txn.get("date") if last_priced_txn else None)
+
         # Remaining cost basis using moving-average method.
         running_units = 0.0
         running_cost = 0.0
@@ -311,7 +326,11 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
         nav_age_days = (today - nav_date_obj).days if nav_date_obj else None
 
         current_value = units_held * nav if nav is not None else None
-        opening_value = opening_units * nav if nav is not None else None
+        opening_value = (
+            opening_units * opening_nav_proxy
+            if (opening_nav_proxy is not None and opening_units is not None)
+            else None
+        )
         month_pnl_est = (
             (current_value - opening_value - month_flow)
             if (current_value is not None and opening_value is not None)
@@ -329,6 +348,20 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
             else None
         )
         breakeven_nav = (running_cost / units_held) if units_held else None
+        annualized_return_pct = None
+        if nav is not None and last_priced_nav and last_priced_date:
+            days = (today - last_priced_date).days
+            if days > 0 and last_priced_nav > 0:
+                annualized_return_pct = ((nav / last_priced_nav) ** (365 / days) - 1) * 100
+
+        days_elapsed_month = max((today - month_start).days + 1, 1)
+        month_return_est_ann = None
+        month_pnl_est_ann = None
+        if annualized_return_pct is not None and opening_value and opening_value > 0:
+            ann_factor = 1 + (annualized_return_pct / 100)
+            if ann_factor > 0:
+                month_return_est_ann = ((ann_factor ** (days_elapsed_month / 365)) - 1) * 100
+                month_pnl_est_ann = opening_value * month_return_est_ann / 100
 
         holdings.append(
             {
@@ -350,9 +383,15 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
                 "month_flow": round(month_flow, 2),
                 "month_pnl_est": round(month_pnl_est, 2) if month_pnl_est is not None else None,
                 "month_return_est": round(month_return_est, 2) if month_return_est is not None else None,
+                "month_pnl_est_ann": round(month_pnl_est_ann, 2) if month_pnl_est_ann is not None else None,
+                "month_return_est_ann": round(month_return_est_ann, 2) if month_return_est_ann is not None else None,
                 "opening_value": round(opening_value, 2) if opening_value is not None else None,
+                "opening_nav_proxy": round(opening_nav_proxy, 4) if opening_nav_proxy is not None else None,
                 "month_txn_count": month_txn_count,
                 "txn_count": len(txns),
+                "last_priced_nav": round(last_priced_nav, 4) if last_priced_nav is not None else None,
+                "last_priced_date": last_priced_date,
+                "annualized_return_pct": round(annualized_return_pct, 2) if annualized_return_pct is not None else None,
             }
         )
 
@@ -369,6 +408,14 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
     total_month_return_est = (
         total_month_pnl_est / total_opening_value * 100
         if total_opening_value > 0
+        else None
+    )
+    valid_ann = [h for h in valid if h.get("month_pnl_est_ann") is not None and (h.get("opening_value") or 0) > 0]
+    total_month_pnl_est_ann = sum((h.get("month_pnl_est_ann") or 0) for h in valid_ann)
+    total_opening_value_ann = sum((h.get("opening_value") or 0) for h in valid_ann)
+    total_month_return_est_ann = (
+        total_month_pnl_est_ann / total_opening_value_ann * 100
+        if total_opening_value_ann > 0
         else None
     )
     total_realized_pnl = sum(h["realized_pnl"] for h in holdings)
@@ -401,6 +448,8 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
         "total_month_flow": round(total_month_flow, 2),
         "total_month_pnl_est": round(total_month_pnl_est, 2),
         "total_month_return_est": round(total_month_return_est, 2) if total_month_return_est is not None else None,
+        "total_month_pnl_est_ann": round(total_month_pnl_est_ann, 2),
+        "total_month_return_est_ann": round(total_month_return_est_ann, 2) if total_month_return_est_ann is not None else None,
         "total_realized_pnl": round(total_realized_pnl, 2),
         "active_funds_this_month": active_funds_this_month,
         "missing_nav_count": missing_nav_count,
@@ -456,16 +505,6 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                                 fmt_lkr(ut_summary["total_month_flow"]),
                                 pnl_class(ut_summary["total_month_flow"]),
                         ),
-                        card(
-                                "Estimated Month Return",
-                                (
-                                        f"{pnl_arrow(ut_summary['total_month_pnl_est'])} {fmt_lkr(ut_summary['total_month_pnl_est'])} "
-                                        f"({fmt_pct(ut_summary['total_month_return_est'])})"
-                                )
-                                if ut_summary.get("total_month_return_est") is not None
-                                else fmt_lkr(ut_summary["total_month_pnl_est"]),
-                                pnl_class(ut_summary.get("total_month_pnl_est")),
-                        ),
                 ]
         )
 
@@ -511,6 +550,11 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                 breakeven_nav = f"{h['breakeven_nav']:.4f}" if h.get("breakeven_nav") is not None else "N/A"
                 last_txn = h["last_txn"].isoformat() if h.get("last_txn") else "N/A"
                 nav_freshness = f"{h['nav_age_days']}d" if h.get("nav_age_days") is not None else "N/A"
+                last_priced_nav = f"{h['last_priced_nav']:.4f}" if h.get("last_priced_nav") is not None else "N/A"
+                last_priced_date = h["last_priced_date"].isoformat() if h.get("last_priced_date") else "N/A"
+                annualized_return = fmt_pct(h.get("annualized_return_pct")) if h.get("annualized_return_pct") is not None else "N/A"
+                month_pnl_est_ann = fmt_lkr(h.get("month_pnl_est_ann")) if h.get("month_pnl_est_ann") is not None else "N/A"
+                month_return_est_ann = fmt_pct(h.get("month_return_est_ann")) if h.get("month_return_est_ann") is not None else "N/A"
 
                 ut_rows += f"""
                 <tr>
@@ -522,8 +566,13 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                     <td class=\"num\">{fmt_lkr(h['current_value']) if h.get('current_value') is not None else 'N/A'}</td>
                     <td class=\"num {pnl_class(h['pnl_lkr'])}\">{pnl_arrow(h['pnl_lkr'])} {fmt_lkr(h['pnl_lkr']) if h.get('pnl_lkr') is not None else 'N/A'}</td>
                     <td class=\"num {pnl_class(h['pnl_pct'])}\">{fmt_pct(h['pnl_pct'])}</td>
+                    <td class=\"num {pnl_class(h.get('annualized_return_pct'))}\">{annualized_return}</td>
+                    <td class=\"num\">{last_priced_nav}</td>
+                    <td>{last_priced_date}</td>
                     <td class=\"num {pnl_class(h['month_flow'])}\">{fmt_lkr(h['month_flow'])}</td>
                     <td class=\"num {pnl_class(h.get('month_pnl_est'))}\">{fmt_lkr(h['month_pnl_est']) if h.get('month_pnl_est') is not None else 'N/A'}</td>
+                    <td class=\"num {pnl_class(h.get('month_pnl_est_ann'))}\">{month_pnl_est_ann}</td>
+                    <td class=\"num {pnl_class(h.get('month_return_est_ann'))}\">{month_return_est_ann}</td>
                     <td>{nav_freshness}</td>
                     <td>{last_txn}</td>
                 </tr>
@@ -644,8 +693,13 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                     <th style=\"text-align:right\">Current Value</th>
                     <th style=\"text-align:right\">Unrealized P&L</th>
                     <th style=\"text-align:right\">Unrealized %</th>
+                    <th style=\"text-align:right\">Annualized Return</th>
+                    <th style=\"text-align:right\">Last Txn NAV</th>
+                    <th>Last Txn NAV Date</th>
                     <th style=\"text-align:right\">This Month Flow</th>
-                    <th style=\"text-align:right\">Est. Month P&L</th>
+                    <th style=\"text-align:right\">Est. Month P&L (ΔNAV)</th>
+                    <th style=\"text-align:right\">Est. Month P&L (Ann.)</th>
+                    <th style=\"text-align:right\">Est. Month Return (Ann.)</th>
                     <th>NAV Age</th>
                     <th>Last Transaction</th>
                 </tr>
@@ -724,7 +778,12 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                 <tr>
                     <td>This Month Flow &amp; Est. Month P&amp;L</td>
                     <td>Net cash added/withdrawn this month and estimated monthly investment result.</td>
-                    <td>Read together: flow explains capital movement, P&amp;L explains performance.</td>
+                    <td>Compared using two methods: ΔNAV (current vs pre-month proxy, flow-adjusted) and Annualized Proxy (day-gap based compounding).</td>
+                </tr>
+                <tr>
+                    <td>Annualized Return</td>
+                    <td>Annualized rate implied by latest NAV compared with the fund's last transaction NAV.</td>
+                    <td>Useful for rough comparison; short holding periods can overstate annualized values.</td>
                 </tr>
             </tbody>
         </table>
