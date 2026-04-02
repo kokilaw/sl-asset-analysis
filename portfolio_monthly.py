@@ -609,14 +609,15 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
         <table>
             <thead>
                 <tr>
-                    <th>Date</th>
                     <th>Fund</th>
-                    <th>Type</th>
-                    <th style="text-align:right">Units</th>
-                    <th style="text-align:right">Cash Flow</th>
+                    <th style="text-align:right">Allocation</th>
+                    <th style="text-align:right">Current Value</th>
+                    <th style="text-align:right">Unrealized P&L</th>
+                    <th style="text-align:right">Contribution to Total P&L</th>
+                    <th style="text-align:right">NAV Age</th>
                 </tr>
             </thead>
-            <tbody>{activity_rows}</tbody>
+            <tbody>{allocation_rows}</tbody>
         </table>
     </div>
 
@@ -677,19 +678,6 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
                     <td>Read together: flow explains capital movement, P&amp;L explains performance.</td>
                 </tr>
             </tbody>
-        </table>
-    </div>
-            <thead>
-                <tr>
-                    <th>Fund</th>
-                    <th style=\"text-align:right\">Allocation</th>
-                    <th style=\"text-align:right\">Current Value</th>
-                    <th style=\"text-align:right\">Unrealized P&L</th>
-                    <th style=\"text-align:right\">Contribution to Total P&L</th>
-                    <th style=\"text-align:right\">NAV Age</th>
-                </tr>
-            </thead>
-            <tbody>{allocation_rows}</tbody>
         </table>
     </div>
 
