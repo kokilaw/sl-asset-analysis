@@ -110,6 +110,7 @@ jobs:
               if path.exists():
                   links.append(f'<li><a href="{filename}">{label}</a></li>')
 
+          now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
           now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
           html = f'''<!doctype html>
           <html lang="en">
@@ -128,10 +129,20 @@ jobs:
           </head>
           <body>
             <h1>SL Asset Analysis Reports</h1>
-            <p>Last generated: {now}</p>
+            <p>Last generated: <span id="generated-local-time" data-generated-utc="{now_iso}">{now}</span></p>
             <ul>
               {''.join(links) if links else '<li>No reports found.</li>'}
             </ul>
+            <script>
+              (() => {{
+                const el = document.getElementById('generated-local-time');
+                if (!el) return;
+                const iso = el.getAttribute('data-generated-utc');
+                const dt = new Date(iso);
+                if (Number.isNaN(dt.getTime())) return;
+                el.textContent = dt.toLocaleString(undefined, {{ dateStyle: 'medium', timeStyle: 'short' }});
+              }})();
+            </script>
           </body>
           </html>'''
 

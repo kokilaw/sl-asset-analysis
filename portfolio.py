@@ -7,7 +7,7 @@ Generates a self-contained HTML report: portfolio_report_YYYY-MM-DD.html
 
 import requests
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import os
 
 # ─── Portfolio Configuration ──────────────────────────────────────────────────
@@ -197,7 +197,8 @@ def pnl_arrow(value):
     return "▲" if value >= 0 else "▼"
 
 def generate_html(stocks: list, summary: dict) -> str:
-    report_date = datetime.now().strftime("%B %d, %Y at %H:%M")
+    generated_utc_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     today = date.today().isoformat()
 
     total_pnl_cls  = pnl_class(summary["total_pnl"])
@@ -413,7 +414,7 @@ def generate_html(stocks: list, summary: dict) -> str:
 </head>
 <body>
   <h1>📊 CSE Portfolio Report</h1>
-  <p class="subtitle">Generated on {report_date} &nbsp;·&nbsp; Data via TradingView &nbsp;·&nbsp; {summary['stock_count']} holdings</p>
+  <p class="subtitle">Generated on <span id="generated-local-time" data-generated-utc="{generated_utc_iso}">{report_date}</span> &nbsp;·&nbsp; Data via TradingView &nbsp;·&nbsp; {summary['stock_count']} holdings</p>
 
   <!-- Summary Cards -->
   <div class="cards">
@@ -524,6 +525,16 @@ def generate_html(stocks: list, summary: dict) -> str:
   </p>
 
   <script>
+    // Render generated time in browser local timezone
+    (() => {{
+      const el = document.getElementById('generated-local-time');
+      if (!el) return;
+      const iso = el.getAttribute('data-generated-utc');
+      const dt = new Date(iso);
+      if (Number.isNaN(dt.getTime())) return;
+      el.textContent = dt.toLocaleString(undefined, {{ dateStyle: 'medium', timeStyle: 'short' }});
+    }})();
+
     // Weekly performance bar chart
     new Chart(document.getElementById('weeklyChart').getContext('2d'), {{
       type: 'bar',

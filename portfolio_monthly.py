@@ -11,7 +11,7 @@ Outputs:
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from io import BytesIO
 import os
 import re
@@ -415,7 +415,8 @@ def build_ut_holdings() -> tuple[list[dict], dict]:
 
 
 def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
-        report_date = datetime.now().strftime("%B %d, %Y at %H:%M")
+        generated_utc_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         today = date.today().isoformat()
 
         ut_total_value = ut_summary["total_value"]
@@ -603,7 +604,7 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
 </head>
 <body>
     <h1>🗓️ Monthly Unit Trust Report</h1>
-    <p class=\"subtitle\">Generated on {report_date} · Unit trusts from Google Sheet + CAL NAV API</p>
+    <p class=\"subtitle\">Generated on <span id=\"generated-local-time\" data-generated-utc=\"{generated_utc_iso}\">{report_date}</span> · Unit trusts from Google Sheet + CAL NAV API</p>
 
     <div class=\"cards\">{cards_html}</div>
     {best_html}
@@ -730,6 +731,17 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
     </div>
 
     <p class=\"footer\">For personal tracking only — not financial advice.</p>
+
+        <script>
+            (() => {{
+                const el = document.getElementById('generated-local-time');
+                if (!el) return;
+                const iso = el.getAttribute('data-generated-utc');
+                const dt = new Date(iso);
+                if (Number.isNaN(dt.getTime())) return;
+                el.textContent = dt.toLocaleString(undefined, {{ dateStyle: 'medium', timeStyle: 'short' }});
+            }})();
+        </script>
 </body>
 </html>
 """
