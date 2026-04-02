@@ -21,7 +21,6 @@ python3 portfolio.py
 
 Outputs:
 - `generated/portfolio_report.html` (browser/interactive)
-- `generated/portfolio_email.html` (email-safe HTML)
 
 Behavior:
 - Output filenames are fixed and overwrite previous versions each run.

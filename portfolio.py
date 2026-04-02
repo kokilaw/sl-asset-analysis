@@ -7,7 +7,6 @@ Generates a self-contained HTML report: portfolio_report_YYYY-MM-DD.html
 
 import requests
 import json
-import urllib.parse
 from datetime import datetime, date
 import os
 
@@ -32,20 +31,6 @@ UNIT_TRUSTS = [
 ]
 
 CAL_UT_API = "https://cal.lk/wp-admin/admin-ajax.php?action=getUnitTrust"
-
-# ─── Email Configuration ──────────────────────────────────────────────────────
-# Set SEND_EMAIL = True and fill in your SMTP credentials to enable email delivery.
-# For Gmail: enable 2FA, then create an App Password at
-#   https://myaccount.google.com/apppasswords
-EMAIL_CONFIG = {
-    "enabled":       False,
-    "smtp_host":     "smtp.gmail.com",
-    "smtp_port":     587,
-    "username":      "your@gmail.com",       # sender address
-    "password":      "your-app-password",    # Gmail App Password (not your login password)
-    "from_name":     "CSE Portfolio Bot",
-    "recipients":    ["your@gmail.com"],      # list of recipient addresses
-}
 
 TV_EXCHANGE = "CSELK"
 TV_FIELDS = [
@@ -552,261 +537,6 @@ def generate_html(stocks: list, summary: dict) -> str:
 
 
 
-# ─── Email HTML Generator ──────────────────────────────────────────────────────
-# Email clients strip JavaScript and external stylesheets. This version uses:
-#   - Inline CSS on every element
-#   - Table-based layout (600px wide)
-#   - QuickChart.io to render charts as server-side PNG images
-
-def _quickchart_url(chart_config: dict, width: int = 560, height: int = 220) -> str:
-    """Return a QuickChart.io image URL for the given Chart.js config dict."""
-    encoded = urllib.parse.quote(json.dumps(chart_config))
-    return f"https://quickchart.io/chart?c={encoded}&width={width}&height={height}&bkg=%23ffffff"
-
-
-def generate_email_html(stocks: list, summary: dict) -> str:
-    report_date = datetime.now().strftime("%B %d, %Y at %H:%M")
-    today       = date.today().isoformat()
-    valid       = [s for s in stocks if not s.get("error")]
-
-    # ── Colour helpers (inline-safe) ──
-    def c(value):
-        if value is None: return "#64748b"
-        return "#16a34a" if value >= 0 else "#dc2626"
-
-    def signed(value, decimals=2):
-        if value is None: return "N/A"
-        sign = "+" if value >= 0 else ""
-        return f"{sign}{value:.{decimals}f}"
-
-    # ── QuickChart URLs ──
-    labels     = [s["symbol"].replace(".N0000", "") for s in valid]
-    weekly_data = [round(s.get("perf_w") or 0, 2) for s in valid]
-    alloc_data  = [s["current_value"] for s in valid]
-    donut_palette = ["#3b82f6","#8b5cf6","#f59e0b","#10b981","#f43f5e"][:len(valid)]
-    bar_colors  = ["#16a34a" if v >= 0 else "#dc2626" for v in weekly_data]
-
-    weekly_chart_url = _quickchart_url({
-        "type": "bar",
-        "data": {
-            "labels": labels,
-            "datasets": [{"label": "1W %", "data": weekly_data,
-                          "backgroundColor": bar_colors, "borderRadius": 4}]
-        },
-        "options": {
-            "plugins": {"legend": {"display": False},
-                        "title": {"display": True, "text": "This Week — Performance (%)",
-                                  "font": {"size": 13}}},
-            "scales": {
-                "y": {"ticks": {"callback": "function(v){return (v>=0?'+':'')+v+'%'}"}},
-                "x": {"grid": {"display": False}}
-            }
-        }
-    })
-
-    donut_chart_url = _quickchart_url({
-        "type": "doughnut",
-        "data": {
-            "labels": labels,
-            "datasets": [{"data": alloc_data, "backgroundColor": donut_palette,
-                          "borderWidth": 2, "borderColor": "#ffffff"}]
-        },
-        "options": {
-            "cutout": "60%",
-            "plugins": {"legend": {"position": "right"},
-                        "title": {"display": True, "text": "Portfolio Allocation",
-                                  "font": {"size": 13}}}
-        }
-    }, width=460, height=220)
-
-    # ── Summary card rows (2 per row) ──
-    total_pnl_sign = "+" if summary["total_pnl"] >= 0 else ""
-    wk_sign = "+" if (summary.get("total_weekly_pnl") or 0) >= 0 else ""
-    wk_lkr  = summary.get("total_weekly_pnl")
-    wk_pct  = summary.get("total_weekly_pct")
-
-    def card(label, value_html):
-        return f"""<td width="50%" style="padding:0 6px 12px 0">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;border:1px solid #e2e8f0">
-            <tr><td style="padding:14px 16px">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:6px">{label}</div>
-              <div style="font-size:16px;font-weight:700;color:#0f172a">{value_html}</div>
-            </td></tr>
-          </table>
-        </td>"""
-
-    bw = summary.get("best_week")
-    ww = summary.get("worst_week")
-
-    cards_rows = f"""
-    <tr>
-      {card("Total Invested", fmt_lkr(summary['total_cost']))}
-      {card("Current Value",  fmt_lkr(summary['total_value']))}
-    </tr>
-    <tr>
-      {card("Overall P&amp;L",
-            f'<span style="color:{c(summary["total_pnl"])}">'
-            f'{pnl_arrow(summary["total_pnl"])} '
-            f'{total_pnl_sign}{fmt_lkr(summary["total_pnl"])} '
-            f'<span style="font-size:13px">({total_pnl_sign}{summary["total_pnl_pct"]:.2f}%)</span></span>')}
-      {card("This Week",
-            f'<span style="color:{c(wk_lkr)}">'
-            f'{pnl_arrow(wk_lkr)} '
-            f'{wk_sign}{fmt_lkr(wk_lkr)} '
-            f'<span style="font-size:13px">({wk_sign}{wk_pct:.2f}%)</span></span>'
-            if wk_lkr is not None else "N/A")}
-    </tr>"""
-
-    if bw:
-        cards_rows += f"""
-    <tr>
-      {card("🏆 Best This Week",
-            f'<span style="color:#16a34a">{bw["symbol"].replace(".N0000","")} &nbsp;'
-            f'<span style="font-size:13px">{fmt_pct(bw["perf_w"])}</span></span>')}
-      {card("📉 Worst This Week",
-            f'<span style="color:#dc2626">{ww["symbol"].replace(".N0000","")} &nbsp;'
-            f'<span style="font-size:13px">{fmt_pct(ww["perf_w"])}</span></span>')}
-    </tr>"""
-
-    # ── Holdings table rows ──
-    TH = ("background:#f8fafc;padding:8px 10px;font-size:11px;text-transform:uppercase;"
-          "letter-spacing:.04em;color:#94a3b8;border-bottom:2px solid #e2e8f0;white-space:nowrap")
-    TH_R = TH + ";text-align:right"
-    TD   = "padding:9px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;font-size:13px;color:#1e293b"
-    TD_R = TD + ";text-align:right;font-variant-numeric:tabular-nums"
-
-    header = f"""<tr>
-      <th style="{TH}">Symbol</th>
-      <th style="{TH_R}">Weight</th>
-      <th style="{TH_R}">Units</th>
-      <th style="{TH_R}">Buy</th>
-      <th style="{TH_R}">Current</th>
-      <th style="{TH_R}">Cost Basis</th>
-      <th style="{TH_R}">Mkt Value</th>
-      <th style="{TH_R}">P&amp;L (LKR)</th>
-      <th style="{TH_R}">P&amp;L %</th>
-      <th style="{TH_R}">Wk Gain</th>
-      <th style="{TH_R}">1W%</th>
-      <th style="{TH_R}">1M%</th>
-      <th style="{TH_R}">3M%</th>
-      <th style="{TH_R}">1Y%</th>
-      <th style="{TH_R}">vs 52W Hi</th>
-    </tr>"""
-
-    stock_rows = ""
-    for s in valid:
-        cp   = s["current_price"]
-        pnl  = s["pnl_pct"]
-        wk   = s.get("weekly_pnl_lkr")
-        p52  = s.get("pct_from_52w_high")
-        sym  = s["symbol"].replace(".N0000", "")
-
-        def td(val, color=None, bold=False):
-            style = TD_R
-            if color: style += f";color:{color}"
-            if bold:  style += ";font-weight:700"
-            return f'<td style="{style}">{val}</td>'
-
-        def pct_td(val):
-            return td(fmt_pct(val), color=c(val))
-
-        wk_str = f"{pnl_arrow(wk)} LKR {abs(wk):,.2f}" if wk is not None else "N/A"
-
-        # 52W badge
-        p52_str = fmt_pct(p52) if p52 is not None else "N/A"
-        p52_bg  = "#dcfce7" if (p52 or 0) >= 0 else "#fee2e2"
-        p52_col = "#15803d" if (p52 or 0) >= 0 else "#b91c1c"
-        p52_cell = (f'<td style="{TD_R}"><span style="background:{p52_bg};color:{p52_col};'
-                    f'padding:2px 7px;border-radius:999px;font-size:11px;font-weight:600">'
-                    f'{p52_str}</span></td>')
-
-        stock_rows += f"""<tr>
-          <td style="{TD};font-weight:700;color:#0f172a">{sym}</td>
-          <td style="{TD_R};font-weight:600;color:#475569">{s.get('weight_pct', 0):.1f}%</td>
-          {td(f"{s['units']:,}")}
-          {td(f"{s['buy_price']:.2f}")}
-          {td(f"{cp:.2f}", bold=True)}
-          {td(fmt_lkr(s['cost_basis']))}
-          {td(fmt_lkr(s['current_value']))}
-          {td(f"{pnl_arrow(pnl)} {fmt_lkr(s['pnl_lkr'])}", color=c(pnl))}
-          {td(fmt_pct(pnl), color=c(pnl))}
-          {td(wk_str, color=c(wk))}
-          {pct_td(s.get('perf_w'))}
-          {pct_td(s.get('perf_1m'))}
-          {pct_td(s.get('perf_3m'))}
-          {pct_td(s.get('perf_y'))}
-          {p52_cell}
-        </tr>"""
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CSE Portfolio Report — {today}</title>
-</head>
-<body style="margin:0;padding:0;background:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
-  <!-- Outer wrapper -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:24px 0">
-    <tr><td align="center">
-
-      <!-- Container -->
-      <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%">
-
-        <!-- Header -->
-        <tr><td style="padding:0 0 20px 0">
-          <h1 style="margin:0;font-size:22px;font-weight:700;color:#0f172a">📊 CSE Portfolio Report</h1>
-          <p style="margin:4px 0 0;font-size:13px;color:#64748b">
-            {report_date} &nbsp;·&nbsp; {summary['stock_count']} holdings &nbsp;·&nbsp; Data via TradingView
-          </p>
-        </td></tr>
-
-        <!-- Summary Cards -->
-        <tr><td style="padding-bottom:20px">
-          <table width="100%" cellpadding="0" cellspacing="0">
-            {cards_rows}
-          </table>
-        </td></tr>
-
-        <!-- Charts row -->
-        <tr><td style="padding-bottom:20px">
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td width="55%" style="padding-right:8px">
-                <img src="{weekly_chart_url}" width="100%" alt="Weekly performance chart"
-                     style="border-radius:8px;border:1px solid #e2e8f0;display:block"/>
-              </td>
-              <td width="45%">
-                <img src="{donut_chart_url}" width="100%" alt="Allocation chart"
-                     style="border-radius:8px;border:1px solid #e2e8f0;display:block"/>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
-
-        <!-- Holdings Table -->
-        <tr><td style="padding-bottom:20px">
-          <table width="100%" cellpadding="0" cellspacing="0"
-                 style="background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;border-collapse:collapse;overflow:hidden">
-            <thead>{header}</thead>
-            <tbody>{stock_rows}</tbody>
-          </table>
-        </td></tr>
-
-        <!-- Footer -->
-        <tr><td style="padding-bottom:8px;text-align:center;font-size:12px;color:#94a3b8">
-          Prices from <a href="https://www.tradingview.com" style="color:#3b82f6">TradingView</a>.
-          For personal tracking only — not financial advice.
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>
-"""
-
-
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -830,23 +560,18 @@ def main():
         print(f"  Best wk  : {summary['best_week']['symbol']}  ({fmt_pct(summary['best_week']['perf_w'])})")
         print(f"  Worst wk : {summary['worst_week']['symbol']}  ({fmt_pct(summary['worst_week']['perf_w'])})")
 
-    html       = generate_html(stocks, summary)
-    email_html = generate_email_html(stocks, summary)
+    html = generate_html(stocks, summary)
 
     base_dir      = os.path.dirname(os.path.abspath(__file__))
     generated_dir = os.path.join(base_dir, "generated")
     os.makedirs(generated_dir, exist_ok=True)
 
     browser_file = os.path.join(generated_dir, "portfolio_report.html")
-    email_file   = os.path.join(generated_dir, "portfolio_email.html")
 
     with open(browser_file, "w", encoding="utf-8") as f:
         f.write(html)
-    with open(email_file, "w", encoding="utf-8") as f:
-        f.write(email_html)
 
     print("\n✅ Browser report : generated/portfolio_report.html")
-    print("   Email version  : generated/portfolio_email.html")
     print(f"   Open browser   : file://{browser_file}")
 
 
