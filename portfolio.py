@@ -462,6 +462,62 @@ def generate_html(stocks: list, summary: dict) -> str:
     </table>
   </div>
 
+  <!-- Terminology Guide -->
+  <div class="table-wrap" style="margin-top:16px;">
+    <h2>📘 Quick Guide (Key Terms)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>What it means</th>
+          <th>What to look for</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Total Invested</td>
+          <td>Total money put into current holdings.</td>
+          <td>Reference baseline for P&amp;L.</td>
+        </tr>
+        <tr>
+          <td>Current Value</td>
+          <td>What your holdings are worth now at market prices.</td>
+          <td>Ideally above Total Invested over time.</td>
+        </tr>
+        <tr>
+          <td>Overall P&amp;L</td>
+          <td>Gain/loss since purchase in LKR and %.</td>
+          <td>Positive and improving trend is generally healthy.</td>
+        </tr>
+        <tr>
+          <td>This Week / Wk Gain (LKR)</td>
+          <td>Estimated gain/loss for the last week.</td>
+          <td>Use for short-term movement only; avoid overreacting to one week.</td>
+        </tr>
+        <tr>
+          <td>Weight</td>
+          <td>Each stock's share of total portfolio value.</td>
+          <td>Avoid over-concentration in one stock (often &lt;30–35%).</td>
+        </tr>
+        <tr>
+          <td>1W / 1M / 3M / 1Y %</td>
+          <td>Price return over those time windows.</td>
+          <td>Check consistency across periods, not just one timeframe.</td>
+        </tr>
+        <tr>
+          <td>vs 52W High</td>
+          <td>Distance from the 52-week peak price.</td>
+          <td>Near 0% means near peak; very negative can mean weakness or value.</td>
+        </tr>
+        <tr>
+          <td>52W Range</td>
+          <td>Where current price sits between 52-week low and high.</td>
+          <td>Use with fundamentals; position alone is not a buy/sell signal.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <p class="footer">
     Prices from <a href="https://www.tradingview.com" target="_blank">TradingView</a>.
     For personal tracking only — not financial advice.

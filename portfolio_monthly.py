@@ -596,6 +596,78 @@ def generate_monthly_html(ut_holdings: list, ut_summary: dict) -> str:
         <table>
             <thead>
                 <tr>
+                    <th>Date</th>
+                    <th>Fund</th>
+                    <th>Type</th>
+                    <th style="text-align:right">Units</th>
+                    <th style="text-align:right">Cash Flow</th>
+                </tr>
+            </thead>
+            <tbody>{activity_rows}</tbody>
+        </table>
+    </div>
+
+    <div class="table-wrap">
+        <h2>📘 Quick Guide (Key Terms)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>What it means</th>
+                    <th>What to look for</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Cost Basis</td>
+                    <td>Remaining invested amount for current units (after redemptions).</td>
+                    <td>Used as the baseline for unrealized return.</td>
+                </tr>
+                <tr>
+                    <td>Current Value</td>
+                    <td>Current units × latest NAV.</td>
+                    <td>Should grow above Cost Basis over long periods.</td>
+                </tr>
+                <tr>
+                    <td>Unrealized P&amp;L / Unrealized %</td>
+                    <td>Profit/loss if you valued holdings today without selling.</td>
+                    <td>Positive is favorable; compare across funds for relative strength.</td>
+                </tr>
+                <tr>
+                    <td>Realized P&amp;L</td>
+                    <td>Profit/loss already locked in from past redemptions.</td>
+                    <td>Sustainably positive over time is generally better.</td>
+                </tr>
+                <tr>
+                    <td>Break-even NAV</td>
+                    <td>NAV needed for current holding to be at zero unrealized P&amp;L.</td>
+                    <td>Current NAV above break-even is favorable.</td>
+                </tr>
+                <tr>
+                    <td>Allocation</td>
+                    <td>Fund's share of total portfolio value.</td>
+                    <td>Keep diversification; avoid very high concentration in one fund.</td>
+                </tr>
+                <tr>
+                    <td>Contribution to Total P&amp;L</td>
+                    <td>How much each fund drives total unrealized portfolio gain/loss.</td>
+                    <td>Large positive contributors are leading returns; large negative need review.</td>
+                </tr>
+                <tr>
+                    <td>NAV Age / Missing NAV / Stale NAV</td>
+                    <td>How fresh valuation data is, and whether any values are unavailable.</td>
+                    <td>Prefer low NAV age, zero missing NAV, and zero stale NAV.</td>
+                </tr>
+                <tr>
+                    <td>This Month Flow &amp; Est. Month P&amp;L</td>
+                    <td>Net cash added/withdrawn this month and estimated monthly investment result.</td>
+                    <td>Read together: flow explains capital movement, P&amp;L explains performance.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+            <thead>
+                <tr>
                     <th>Fund</th>
                     <th style=\"text-align:right\">Allocation</th>
                     <th style=\"text-align:right\">Current Value</th>
